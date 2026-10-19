@@ -1,46 +1,111 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VE1 Audio - GTT</title>
+<title>VE1 Audio</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-body{font-family:Arial,sans-serif;background:#eaf2f8;color:#17324d;margin:0;padding:18px}
-main{max-width:600px;margin:auto;background:white;padding:20px;border-radius:18px;box-shadow:0 4px 14px #0002}
-h1{color:#0875a5}button{width:100%;padding:15px;margin:8px 0;border:0;border-radius:10px;font-size:17px;background:#0875a5;color:white}
-#stato{padding:12px;background:#dff4ff;border-radius:10px}
+body{font-family:Arial,sans-serif;margin:0;background:#f2f5f9;color:#172033}
+header{background:#0755a5;color:white;padding:18px;text-align:center}
+main{padding:15px;max-width:700px;margin:auto}
+#map{height:330px;border-radius:12px;border:1px solid #bbb}
+button{padding:13px;margin:5px 2px;border:0;border-radius:8px;background:#0755a5;color:white;font-size:16px}
+.stop{background:#526477}
+.panel{background:white;padding:14px;border-radius:12px;margin:12px 0}
+small{color:#526477}
 </style>
 </head>
 <body>
-<main>
+<header>
 <h1>🚌 VE1 Audio</h1>
-<p><b>Linea GTT VE1</b><br>Direzione: Torino → Venaria</p>
-<div id="stato">GPS non avviato</div>
-<button onclick="avviaGPS()">Avvia GPS</button>
-<button onclick="annuncia()">Prova annuncio vocale</button>
-<button onclick="fermaGPS()">Ferma GPS</button>
-<p id="posizione">In attesa della posizione GPS.</p>
-<p><small>Prototipo di prova: il percorso e le fermate reali devono ancora essere verificati e inseriti. Non usare come navigazione professionale.</small></p>
+<div>Torino → Venaria Reale</div>
+</header>
+<main>
+<div class="panel">
+<strong>Stato GPS:</strong> <span id="status">Non avviato</span>
+<p id="coords">In attesa della posizione.</p>
+<button onclick="startGPS()">Avvia GPS</button>
+<button class="stop" onclick="stopGPS()">Ferma GPS</button>
+<button onclick="speakTest()">Prova voce</button>
+</div>
+
+<div id="map"></div>
+
+<div class="panel">
+<h3>Fermate e annunci</h3>
+<p id="stopstatus">Le fermate ufficiali devono ancora essere caricate.</p>
+<small>Gli annunci automatici sono disattivati finché non vengono verificate le coordinate delle fermate VE1.</small>
+</div>
+<div class="panel">
+<strong>Indicazioni:</strong>
+<p>La mappa mostra la posizione GPS del telefono. Non indica la posizione reale dell'autobus e non sostituisce un navigatore professionale.</p>
+<a href="https://www.gtt.to.it/cms/percorari/urbano?linea=VE1&view=percorsi" target="_blank">Consulta percorso e fermate ufficiali GTT</a>
+</div>
 </main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-let watchId=null;
-function avviaGPS(){
- if(!navigator.geolocation){document.getElementById('stato').textContent='GPS non supportato';return;}
- document.getElementById('stato').textContent='Richiesta autorizzazione GPS…';
- watchId=navigator.geolocation.watchPosition(p=>{
- document.getElementById('stato').textContent='GPS attivo';
- document.getElementById('posizione').textContent='Latitudine: '+p.coords.latitude.toFixed(5)+' — Longitudine: '+p.coords.longitude.toFixed(5);
- },e=>{document.getElementById('stato').textContent='GPS non disponibile: '+e.message;},{enableHighAccuracy:true,maximumAge:3000});
+const map = L.map('map').setView([45.09,7.64],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19,
+  attribution:'© OpenStreetMap contributors'
+}).addTo(map);
+
+let marker=null, accuracyCircle=null, watchId=null;
+
+function speak(text){
+  if(!('speechSynthesis' in window)){
+    alert('La voce non è supportata da questo browser.');
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const msg=new SpeechSynthesisUtterance(text);
+  msg.lang='it-IT';
+  msg.rate=0.9;
+  window.speechSynthesis.speak(msg);
 }
-function annuncia(){
- if(!('speechSynthesis' in window)){alert('Sintesi vocale non supportata dal browser');return;}
- speechSynthesis.cancel();
- let voce=new SpeechSynthesisUtterance('Linea VE1. Direzione Torino verso Venaria. Prova annuncio vocale.');
- voce.lang='it-IT';speechSynthesis.speak(voce);
+
+function speakTest(){
+  speak('VE1 Audio attivo. Direzione Torino verso Venaria Reale.');
 }
-function fermaGPS(){
- if(watchId!==null)navigator.geolocation.clearWatch(watchId);
- watchId=null;document.getElementById('stato').textContent='GPS fermato';
+
+function startGPS(){
+  if(!navigator.geolocation){
+    document.getElementById('status').textContent='GPS non supportato';
+    return;
+  }
+  if(watchId!==null) return;
+  document.getElementById('status').textContent='Richiesta posizione...';
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    const lat=pos.coords.latitude;
+    const lon=pos.coords.longitude;
+    document.getElementById('status').textContent='GPS attivo';
+    document.getElementById('coords').textContent=
+      'Latitudine: '+lat.toFixed(6)+' | Longitudine: '+lon.toFixed(6);
+    if(!marker){
+      marker=L.marker([lat,lon]).addTo(map).bindPopup('La tua posizione');
+      accuracyCircle=L.circle([lat,lon],{
+        radius:pos.coords.accuracy,color:'#0755a5'
+      }).addTo(map);
+      map.setView([lat,lon],16);
+    }else{
+      marker.setLatLng([lat,lon]);
+      accuracyCircle.setLatLng([lat,lon]);
+      accuracyCircle.setRadius(pos.coords.accuracy);
+    }
+  },err=>{
+    document.getElementById('status').textContent=
+      'Errore GPS: '+err.message;
+    watchId=null;
+  },{enableHighAccuracy:true,maximumAge:3000,timeout:15000});
+}
+
+function stopGPS(){
+  if(watchId!==null) navigator.geolocation.clearWatch(watchId);
+  watchId=null;
+  document.getElementById('status').textContent='GPS fermato';
 }
 </script>
 </body>
