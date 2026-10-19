@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VE1 Audio - GTT</title>
+<style>
+body{font-family:Arial,sans-serif;background:#eaf2f8;color:#17324d;margin:0;padding:18px}
+main{max-width:600px;margin:auto;background:white;padding:20px;border-radius:18px;box-shadow:0 4px 14px #0002}
+h1{color:#0875a5}button{width:100%;padding:15px;margin:8px 0;border:0;border-radius:10px;font-size:17px;background:#0875a5;color:white}
+#stato{padding:12px;background:#dff4ff;border-radius:10px}
+</style>
+</head>
+<body>
+<main>
+<h1>🚌 VE1 Audio</h1>
+<p><b>Linea GTT VE1</b><br>Direzione: Torino → Venaria</p>
+<div id="stato">GPS non avviato</div>
+<button onclick="avviaGPS()">Avvia GPS</button>
+<button onclick="annuncia()">Prova annuncio vocale</button>
+<button onclick="fermaGPS()">Ferma GPS</button>
+<p id="posizione">In attesa della posizione GPS.</p>
+<p><small>Prototipo di prova: il percorso e le fermate reali devono ancora essere verificati e inseriti. Non usare come navigazione professionale.</small></p>
+</main>
+<script>
+let watchId=null;
+function avviaGPS(){
+ if(!navigator.geolocation){document.getElementById('stato').textContent='GPS non supportato';return;}
+ document.getElementById('stato').textContent='Richiesta autorizzazione GPS…';
+ watchId=navigator.geolocation.watchPosition(p=>{
+ document.getElementById('stato').textContent='GPS attivo';
+ document.getElementById('posizione').textContent='Latitudine: '+p.coords.latitude.toFixed(5)+' — Longitudine: '+p.coords.longitude.toFixed(5);
+ },e=>{document.getElementById('stato').textContent='GPS non disponibile: '+e.message;},{enableHighAccuracy:true,maximumAge:3000});
+}
+function annuncia(){
+ if(!('speechSynthesis' in window)){alert('Sintesi vocale non supportata dal browser');return;}
+ speechSynthesis.cancel();
+ let voce=new SpeechSynthesisUtterance('Linea VE1. Direzione Torino verso Venaria. Prova annuncio vocale.');
+ voce.lang='it-IT';speechSynthesis.speak(voce);
+}
+function fermaGPS(){
+ if(watchId!==null)navigator.geolocation.clearWatch(watchId);
+ watchId=null;document.getElementById('stato').textContent='GPS fermato';
+}
+</script>
+</body>
+</html>
